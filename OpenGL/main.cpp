@@ -2,8 +2,10 @@
 #include <GLFW/stb_image.h>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <windows.h>
 #include <vector>
 #include <iostream>
+#include <Kinect.h>
 
 struct Vertex {
     float x, y, z;
@@ -19,6 +21,22 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 }
 
 int main() {
+
+    IKinectSensor* sensor = nullptr;
+
+    if (FAILED(GetDefaultKinectSensor(&sensor)) || !sensor)
+    {
+        std::cout << "No Kinect detected\n";
+        return -1;
+    }
+
+    sensor->Open();
+    std::cout << "Kinect initialized successfully!\n";
+
+    sensor->Close();
+    sensor->Release();
+
+
     if (!glfwInit()) return -1;
     GLFWwindow* window = glfwCreateWindow(800, 600, "Point Cloud", nullptr, nullptr);
     if (!window) { glfwTerminate(); return -1; }
