@@ -6,6 +6,14 @@
 #include <vector>
 #include <iostream>
 #include <Kinect.h>
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
+
+using namespace cv;
+
+
+
 
 
 //Own headers

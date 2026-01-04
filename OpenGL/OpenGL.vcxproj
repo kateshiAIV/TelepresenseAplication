@@ -70,6 +70,14 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -105,13 +113,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\inc;C:\Users\kishk\Documents\Libs\glew-2.3.0\include;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\kishk\Documents\Libs\opencv\build\include;C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\inc;C:\Users\kishk\Documents\Libs\glew-2.3.0\include;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\Lib\x64;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\lib-vc2022;C:\Users\kishk\Documents\Libs\glew-2.3.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opengl32.lib;glu32.lib;glew32.lib;glfw3.lib;user32.lib;gdi32.lib;shell32.lib;kinect20.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\kishk\Documents\Libs\opencv\build\x64\vc16\lib;C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\Lib\x64;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\lib-vc2022;C:\Users\kishk\Documents\Libs\glew-2.3.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opengl32.lib;glu32.lib;glew32.lib;glfw3.lib;user32.lib;gdi32.lib;shell32.lib;kinect20.lib;opencv_world4120.lib;opencv_world4120d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -123,13 +131,13 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\inc;C:\Users\kishk\Documents\Libs\glew-2.3.0\include;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\kishk\Documents\Libs\opencv\build\include;C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\inc;C:\Users\kishk\Documents\Libs\glew-2.3.0\include;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\Lib\x64;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\lib-vc2022;C:\Users\kishk\Documents\Libs\glew-2.3.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opengl32.lib;glu32.lib;glew32.lib;glfw3.lib;user32.lib;gdi32.lib;shell32.lib;kinect20.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\kishk\Documents\Libs\opencv\build\x64\vc16\lib;C:\Program Files\Microsoft SDKs\Kinect\v2.0_1409\Lib\x64;C:\Users\kishk\Documents\Libs\glfw-3.4.bin.WIN64\lib-vc2022;C:\Users\kishk\Documents\Libs\glew-2.3.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opengl32.lib;glu32.lib;glew32.lib;glfw3.lib;user32.lib;gdi32.lib;shell32.lib;kinect20.lib;opencv_world4120.lib;opencv_world4120d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
