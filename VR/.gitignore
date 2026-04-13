@@ -1,0 +1,55 @@
+# ==============================
+# Unreal Engine / VS / Rider
+# ==============================
+
+# Build results
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+
+# VS / Rider / IDE
+.vs/
+.vscode/
+.idea/
+
+*.suo
+*.user
+*.userosscache
+*.sln
+*.VC.db
+*.VC.opendb
+
+# Unreal generated files
+*.xcodeproj/
+*.xcworkspace/
+*.opensdf
+*.opendb
+*.sdf
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Crash reports
+Crashes/
+
+# Unreal Engine
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+.vscode/
+.idea/
+
+# Rider/VS
+*.sln
+*.VC.db
+*.opensdf
+*.opendb
+*.sdf
