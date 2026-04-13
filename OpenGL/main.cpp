@@ -13,6 +13,14 @@
 using namespace std;
 
 
+float yaw = 0.0f;    // вращение влево/вправо
+float pitch = 0.0f;  // вверх/вниз
+
+bool isDragging = false;
+
+double lastX = 0.0;
+double lastY = 0.0;
+
 float CAMERA_DISTANCE = 5.0f;
 #define ASSET_PATH "C:/Users/kishk/source/repos/OpenGL/";
 
@@ -22,7 +30,43 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	CAMERA_DISTANCE -= (float)yoffset * 0.5f;
 	if (CAMERA_DISTANCE < 0.1f) CAMERA_DISTANCE = 0.1f;
-	if (CAMERA_DISTANCE > 20.0f) CAMERA_DISTANCE = 20.0f;
+	if (CAMERA_DISTANCE > 40.0f) CAMERA_DISTANCE = 40.0f;
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT)
+	{
+		if (action == GLFW_PRESS)
+		{
+			isDragging = true;
+			glfwGetCursorPos(window, &lastX, &lastY);
+		}
+		else if (action == GLFW_RELEASE)
+		{
+			isDragging = false;
+		}
+	}
+}
+
+void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+	if (!isDragging) return;
+
+	float sensitivity = 0.2f;
+
+	float dx = xpos - lastX;
+	float dy = ypos - lastY;
+
+	lastX = xpos;
+	lastY = ypos;
+
+	yaw += dx * sensitivity;
+	pitch += dy * sensitivity;
+
+	// ограничение, чтобы камера не переворачивалась
+	if (pitch > 89.0f) pitch = 89.0f;
+	if (pitch < -89.0f) pitch = -89.0f;
 }
 
 
@@ -102,6 +146,8 @@ int main()
 
 	glfwMakeContextCurrent(window);
 	glfwSetScrollCallback(window, scroll_callback);  // коллбек для колесика, передаю функцию scroll_callback
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
+	glfwSetCursorPosCallback(window, cursor_position_callback);
 	glEnable(GL_DEPTH_TEST);
 	glPointSize(2.0f);
 
@@ -132,10 +178,14 @@ int main()
 		glLoadIdentity();
 		glTranslatef(0.0f, 0.0f, -CAMERA_DISTANCE);
 
+		// порядок важен!
+		glRotatef(pitch, 1.0f, 0.0f, 0.0f); // вверх/вниз
+		glRotatef(yaw, 0.0f, 1.0f, 0.0f); // влево/вправо
+
 		// TODO Kinnect data rendering
 
 
-		createPointCloud(vertices, colorImagePath, depthImagePath);
+		//createPointCloud(vertices, colorImagePath, depthImagePath);
 		drawPointCloud(vertices);
 
 		glfwSwapBuffers(window);
