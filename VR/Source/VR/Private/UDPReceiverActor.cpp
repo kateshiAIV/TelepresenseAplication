@@ -2,6 +2,13 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 
+
+struct FVertex
+{
+	float X, Y, Z;
+	float R, G, B;
+};
+
 AUDPReceiverActor::AUDPReceiverActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -10,6 +17,27 @@ AUDPReceiverActor::AUDPReceiverActor()
 void AUDPReceiverActor::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	
+	
+	
+	// IP ADDRESS
+	bool bCanBind = false;
+	TSharedRef<FInternetAddr> LocalAddr =
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->GetLocalHostAddr(*GLog, bCanBind);
+
+	if (LocalAddr->IsValid())
+	{
+		FString IP = LocalAddr->ToString(false);
+		UE_LOG(LogTemp, Warning, TEXT("Device IP: %s"), *IP);
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 10.f, FColor::Green, IP);
+		}
+	}
+	////////////////////////////////
+	
 
 	FIPv4Endpoint Endpoint(FIPv4Address(127, 0, 0, 1), 5005);
 
@@ -32,10 +60,10 @@ void AUDPReceiverActor::BeginPlay()
 		0.01f,
 		true
 	);
-
+	
+	
 	UE_LOG(LogTemp, Warning, TEXT("UDP Receiver started on 127.0.0.1:5005"));
 }
-
 
 void AUDPReceiverActor::ReceiveUDP()
 {
@@ -51,16 +79,38 @@ void AUDPReceiverActor::ReceiveUDP()
 		int32 BytesRead = 0;
 		Socket->Recv(Buffer.GetData(), Buffer.Num(), BytesRead);
 
-		UE_LOG(LogTemp, Warning, TEXT("Received packet: %d bytes"), BytesRead);
+		if (BytesRead <= 0) return;
 
-		// Debug first bytes
-		FString Debug;
-		for (int i = 0; i < FMath::Min(BytesRead, 20); i++)
+		int32 VertexSize = sizeof(FVertex);
+		int32 VertexCount = BytesRead / VertexSize;
+
+		UE_LOG(LogTemp, Warning, TEXT("Received %d vertices"), VertexCount);
+
+		FVertex* Vertices = reinterpret_cast<FVertex*>(Buffer.GetData());
+
+		for (int32 i = 0; i < VertexCount; i++)
 		{
-			Debug += FString::Printf(TEXT("%d "), Buffer[i]);
-		}
+			const FVertex& V = Vertices[i];
 
-		UE_LOG(LogTemp, Warning, TEXT("Data: %s"), *Debug);
+			// Position
+			FVector Pos(V.X, V.Y, V.Z);
+
+			// Scale to Unreal units (important!)
+			Pos *= 100.0f;
+
+			// Optional: adjust coordinate system if needed
+			// Swap(Pos.Y, Pos.Z);
+
+			// Color
+			FColor Color(
+				(uint8)(FMath::Clamp(V.R, 0.f, 1.f) * 255),
+				(uint8)(FMath::Clamp(V.G, 0.f, 1.f) * 255),
+				(uint8)(FMath::Clamp(V.B, 0.f, 1.f) * 255),
+				255
+			);
+
+			DrawDebugPoint(GetWorld(), Pos, 6.0f, Color, false, 0.05f);
+		}
 	}
 }
 

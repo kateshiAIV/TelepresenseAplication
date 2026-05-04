@@ -46,9 +46,9 @@ int main()
     for (int i = 0; i < 500; i++)
     {
         cloud.push_back({
-            (float)(rand() % 100) / 50.0f - 1.0f,
-            (float)(rand() % 100) / 50.0f - 1.0f,
-            (float)(rand() % 100) / 50.0f - 1.0f,
+            (float)(rand() % 10000) / 50.0f - 1.0f,
+            (float)(rand() % 10000) / 50.0f - 1.0f,
+            (float)(rand() % 10000) / 50.0f - 1.0f,
             1.0f, 0.2f, 0.8f
             });
     }
