@@ -109,7 +109,7 @@ void AUDPReceiverActor::ReceiveUDP()
 				255
 			);
 
-			DrawDebugPoint(GetWorld(), Pos, 6.0f, Color, false, 0.05f);
+			DrawDebugPoint(GetWorld(), Pos, 6.0f, Color, false, 0.5f);
 		}
 	}
 }
