@@ -14,7 +14,7 @@ public class VR : ModuleRules
 			"Engine",
 			"InputCore",
 			"Sockets",
-			"Networking"
+			"Networking", "LidarPointCloudRuntime", "Niagara", "NiagaraCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

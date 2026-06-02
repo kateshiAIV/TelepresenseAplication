@@ -1,6 +1,8 @@
 #include "UDPReceiverActor.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "Common/UdpSocketBuilder.h"
+#include "Interfaces/IPv4/IPv4Endpoint.h"
 
 
 struct FVertex
@@ -16,102 +18,79 @@ AUDPReceiverActor::AUDPReceiverActor()
 }
 void AUDPReceiverActor::BeginPlay()
 {
-	Super::BeginPlay();
-	
-	
-	
-	
-	// IP ADDRESS
-	bool bCanBind = false;
-	TSharedRef<FInternetAddr> LocalAddr =
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->GetLocalHostAddr(*GLog, bCanBind);
+    Super::BeginPlay();
 
-	if (LocalAddr->IsValid())
-	{
-		FString IP = LocalAddr->ToString(false);
-		UE_LOG(LogTemp, Warning, TEXT("Device IP: %s"), *IP);
+    // --- Niagara setup ---
+    if (PointCloudSystem)
+    {
+        NiagaraComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(
+            PointCloudSystem,
+            GetRootComponent(),
+            NAME_None,
+            FVector::ZeroVector,
+            FRotator::ZeroRotator,
+            EAttachLocation::KeepRelativeOffset,
+            false  // don't auto-destroy when finished
+        );
+    }
 
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 10.f, FColor::Green, IP);
-		}
-	}
-	////////////////////////////////
-	
+    // --- UDP socket (same as before) ---
+    FIPv4Endpoint Endpoint(FIPv4Address(127, 0, 0, 1), 5005);
+    Socket = FUdpSocketBuilder(TEXT("UDPReceiver"))
+        .AsNonBlocking().AsReusable()
+        .BoundToEndpoint(Endpoint)
+        .WithReceiveBufferSize(2 * 1024 * 1024);
 
-	FIPv4Endpoint Endpoint(FIPv4Address(127, 0, 0, 1), 5005);
-
-	Socket = FUdpSocketBuilder(TEXT("UDPReceiver"))
-		.AsNonBlocking()
-		.AsReusable()
-		.BoundToEndpoint(Endpoint)
-		.WithReceiveBufferSize(2 * 1024 * 1024);
-
-	if (!Socket)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to create socket"));
-		return;
-	}
-
-	GetWorld()->GetTimerManager().SetTimer(
-		TimerHandle,
-		this,
-		&AUDPReceiverActor::ReceiveUDP,
-		0.01f,
-		true
-	);
-	
-	
-	UE_LOG(LogTemp, Warning, TEXT("UDP Receiver started on 127.0.0.1:5005"));
+    if (Socket)
+    {
+        GetWorld()->GetTimerManager().SetTimer(
+            TimerHandle, this,
+            &AUDPReceiverActor::ReceiveUDP,
+            0.01f, true);
+    }
 }
 
 void AUDPReceiverActor::ReceiveUDP()
 {
-	if (!Socket) return;
+    if (!Socket || !NiagaraComponent) return;
 
-	uint32 Size = 0;
+    uint32 Size = 0;
+    if (!Socket->HasPendingData(Size)) return;
 
-	while (Socket->HasPendingData(Size))
-	{
-		TArray<uint8> Buffer;
-		Buffer.SetNumUninitialized(FMath::Min(Size, 65507u));
+    TArray<uint8> Buffer;
+    Buffer.SetNumUninitialized(FMath::Min(Size, 65507u));
 
-		int32 BytesRead = 0;
-		Socket->Recv(Buffer.GetData(), Buffer.Num(), BytesRead);
+    int32 BytesRead = 0;
+    Socket->Recv(Buffer.GetData(), Buffer.Num(), BytesRead);
+    if (BytesRead <= 0) return;
 
-		if (BytesRead <= 0) return;
+    int32 VertexCount = BytesRead / sizeof(FVertex);
+    FVertex* Verts = reinterpret_cast<FVertex*>(Buffer.GetData());
 
-		int32 VertexSize = sizeof(FVertex);
-		int32 VertexCount = BytesRead / VertexSize;
+    PointPositions.Reset(VertexCount);
+    PointColors.Reset(VertexCount);
 
-		UE_LOG(LogTemp, Warning, TEXT("Received %d vertices"), VertexCount);
+    for (int32 i = 0; i < VertexCount; i++)
+    {
+        const FVertex& V = Verts[i];
+        PointPositions.Add(FVector(V.X, V.Y, V.Z) * 100.f);
+        PointColors.Add(FLinearColor(V.R, V.G, V.B, 1.f));
+    }
 
-		FVertex* Vertices = reinterpret_cast<FVertex*>(Buffer.GetData());
+    // Push to Niagara — these names must match your NS parameters
+    UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(
+        NiagaraComponent, FName("PointsPosition"), PointPositions);
 
-		for (int32 i = 0; i < VertexCount; i++)
-		{
-			const FVertex& V = Vertices[i];
+    UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayColor(
+        NiagaraComponent, FName("PointsColors"), PointColors);
+    
+    
+    NiagaraComponent->SetVariableInt(
+    TEXT("size"),
+    PointColors.Num()
+);
 
-			// Position
-			FVector Pos(V.X, V.Y, V.Z);
-
-			// Scale to Unreal units (important!)
-			Pos *= 100.0f;
-
-			// Optional: adjust coordinate system if needed
-			// Swap(Pos.Y, Pos.Z);
-
-			// Color
-			FColor Color(
-				(uint8)(FMath::Clamp(V.R, 0.f, 1.f) * 255),
-				(uint8)(FMath::Clamp(V.G, 0.f, 1.f) * 255),
-				(uint8)(FMath::Clamp(V.B, 0.f, 1.f) * 255),
-				255
-			);
-
-			DrawDebugPoint(GetWorld(), Pos, 6.0f, Color, false, 0.5f);
-		}
-	}
+    NiagaraComponent->ResetSystem();
 }
 
 void AUDPReceiverActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
