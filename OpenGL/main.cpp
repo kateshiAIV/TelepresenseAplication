@@ -31,10 +31,13 @@ struct Vertex
 };
 #pragma pack(pop)
 
-struct VertexCompressed {
-    int16_t x, y, z;  // 6 байт вместо 12
-    uint8_t r, g, b;  // 3 байта вместо 12
+#pragma pack(push, 1)
+struct VertexCompressed
+{
+    int16_t x, y, z;
+    uint8_t r, g, b;
 };
+#pragma pack(pop)
 
 #pragma pack(push, 1)
 struct PacketHeader
@@ -99,6 +102,9 @@ void generateCloudFromImages(
     {
         for (int x = 0; x < depthW; x+=2)
         {
+
+          
+
             int idxDepth = y * depthW + x;
 
             unsigned char depthValue = depthImg[idxDepth];
@@ -125,6 +131,7 @@ void generateCloudFromImages(
                 g,
                 b
                 });
+
         }
     }
 
@@ -135,6 +142,90 @@ void generateCloudFromImages(
         << cloud.size()
         << " points\n";
 }
+
+void generateCompressedCloudFromImages(
+    std::vector<VertexCompressed>& cloud,
+    const char* colorFile,
+    const char* depthFile)
+{
+    int colorW, colorH, colorC;
+    unsigned char* colorImg =
+        stbi_load(colorFile, &colorW, &colorH, &colorC, 3);
+
+    int depthW, depthH, depthC;
+    unsigned char* depthImg =
+        stbi_load(depthFile, &depthW, &depthH, &depthC, 1);
+
+    if (!colorImg || !depthImg)
+    {
+        std::cout << "Failed to load images\n";
+        return;
+    }
+
+    if (colorW != depthW || colorH != depthH)
+    {
+        std::cout << "Image sizes do not match\n";
+        return;
+    }
+
+    cloud.clear();
+    cloud.reserve(colorW * colorH);
+
+    const float depthScale = 5.0f;
+
+    for (int y = 0; y < depthH; y += 2)
+    {
+        for (int x = 0; x < depthW; x += 2)
+        {
+            int idxDepth = y * depthW + x;
+            unsigned char depthValue = depthImg[idxDepth];
+
+            if (depthValue == 0)
+                continue;
+
+            float z = (depthValue / 255.0f) * depthScale;
+
+            float px = (float)x / depthW - 0.5f;
+            float py = -(float)y / depthH + 0.5f;
+
+            int idxColor = (y * colorW + x) * 3;
+
+            float r = colorImg[idxColor + 0] / 255.0f;
+            float g = colorImg[idxColor + 1] / 255.0f;
+            float b = colorImg[idxColor + 2] / 255.0f;
+
+            const float depthScale = 5.0f;
+
+            int16_t cX = (int16_t)(px * 32767.0f);
+            int16_t cY = (int16_t)(py * 32767.0f);
+            int16_t cZ = (int16_t)((z / depthScale) * 32767.0f);
+
+            uint8_t cR = (uint8_t)(r * 255.0f);
+            uint8_t cG = (uint8_t)(g * 255.0f);
+            uint8_t cB = (uint8_t)(b * 255.0f);
+
+			cloud.push_back({
+				cX,
+				cY,
+				cZ,
+				cR,
+				cG,
+				cB
+				});
+
+
+        }
+    }
+
+    stbi_image_free(colorImg);
+    stbi_image_free(depthImg);
+
+    std::cout << "Loaded compressed point cloud: "
+        << cloud.size()
+        << " points\n";
+}
+
+
 
 int main()
 {
@@ -149,8 +240,8 @@ int main()
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
     std::vector<Vertex> cloud;
+    std::vector<VertexCompressed> cloudCompressed;
 
-    const int POINT_COUNT = 10;
     const int MAX_UDP_SIZE = 1024;
 
     uint32_t frameId = 0;
@@ -160,15 +251,21 @@ int main()
 
     while (true)
     {
-        generateCloudFromImages(
-            cloud,
+
+        generateCompressedCloudFromImages(
+            cloudCompressed,
             "assets/color.jpeg",
             "assets/depth.png");
 
-        const int payloadLimit = MAX_UDP_SIZE - sizeof(PacketHeader);
+        const int stride = sizeof(VertexCompressed);
 
-        int totalSize = cloud.size() * sizeof(Vertex);
+        const int payloadLimit =
+            ((MAX_UDP_SIZE - sizeof(PacketHeader)) / stride) * stride;
+
+        int totalSize = cloudCompressed.size() * sizeof(VertexCompressed);
         int chunkCount = (totalSize + payloadLimit - 1) / payloadLimit;
+
+        uint64_t FrameBytesSent = 0;
 
         for (int chunkId = 0; chunkId < chunkCount; chunkId++)
         {
@@ -176,7 +273,7 @@ int main()
             header.frameId = frameId;
             header.chunkId = chunkId;
             header.chunkCount = chunkCount;
-            header.pointCount = (uint32_t)cloud.size();
+            header.pointCount = (uint32_t)cloudCompressed.size();
 
             int offset = chunkId * payloadLimit;
             int chunkSize = min(payloadLimit, totalSize - offset);
@@ -186,74 +283,29 @@ int main()
 
             memcpy(packet.data(), &header, sizeof(PacketHeader));
             memcpy(packet.data() + sizeof(PacketHeader),
-                ((char*)cloud.data()) + offset,
+                ((char*)cloudCompressed.data()) + offset,
                 chunkSize);
 
-            sendto(sock,
+            int sent = sendto(
+                sock,
                 packet.data(),
                 (int)packet.size(),
                 0,
                 (sockaddr*)&addr,
                 sizeof(addr));
+
+            if (sent > 0)
+            {
+                FrameBytesSent += sent;
+            }
         }
 
-        std::cout << "frame " << frameId
-            << " sent (" << chunkCount << " chunks)\n";
-
-
-
-        //auto t1 = std::chrono::high_resolution_clock::now();
-        //vector<VertexCompressed> compressed;
-        //compressed.reserve(cloud.size());
-        //for (auto& v : cloud) {
-        //    compressed.push_back({
-        //        (int16_t)(v.x * 1000),
-        //        (int16_t)(v.y * 1000),
-        //        (int16_t)(v.z * 1000),
-        //        (uint8_t)(v.r * 255),
-        //        (uint8_t)(v.g * 255),
-        //        (uint8_t)(v.b * 255)
-        //        });
-        //}
-        //auto t2 = std::chrono::high_resolution_clock::now();
-        //auto ms = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
-
-        //cout << "Compression time: " << ms << endl;
-
-
-        //totalSize = compressed.size() * sizeof(VertexCompressed);
-        //chunkCount = (totalSize + payloadLimit - 1) / payloadLimit;
-
-        //for (int chunkId = 0; chunkId < chunkCount; chunkId++)
-        //{
-        //    PacketHeader header;
-        //    header.frameId = frameId;
-        //    header.chunkId = chunkId;
-        //    header.chunkCount = chunkCount;
-        //    header.pointCount = (uint32_t)compressed.size();
-
-        //    int offset = chunkId * payloadLimit;
-        //    int chunkSize = min(payloadLimit, totalSize - offset);
-
-        //    std::vector<char> packet(sizeof(PacketHeader) + chunkSize);
-
-
-        //    memcpy(packet.data(), &header, sizeof(PacketHeader));
-        //    memcpy(packet.data() + sizeof(PacketHeader),
-        //        ((char*)compressed.data()) + offset,
-        //        chunkSize);
-
-        //    sendto(sock,
-        //        packet.data(),
-        //        (int)packet.size(),
-        //        0,
-        //        (sockaddr*)&addr,
-        //        sizeof(addr));
-        //}
-
-        //std::cout << "frame " << frameId
-        //    << " sent (" << chunkCount << " chunks)\n";
-
+        std::cout
+            << "frame " << frameId
+			<< "compressed cloud with " << cloudCompressed.size() << " points, "
+            << " sent (" << chunkCount << " chunks, "
+            << FrameBytesSent << " bytes)"
+            << std::endl;
 
         frameId++;
 

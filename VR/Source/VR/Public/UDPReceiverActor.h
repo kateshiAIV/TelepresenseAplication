@@ -24,6 +24,15 @@ struct FVertex
 };
 #pragma pack(pop)
 
+
+#pragma pack(push, 1)
+struct FVertexCompressed
+{
+    int16_t X, Y, Z;
+    uint8_t R, G, B;
+};
+#pragma pack(pop)
+
 UCLASS()
 class VR_API AUDPReceiverActor : public AActor
 {

@@ -166,30 +166,30 @@ void AUDPReceiverActor::ReceiveUDP()
         }
 
         const int32 VertexCount =
-            FullPayload.Num() / sizeof(FVertex);
+            FullPayload.Num() / sizeof(FVertexCompressed);
 
         if (VertexCount <= 0)
             continue;
 
-        FVertex* Vertices =
-            reinterpret_cast<FVertex*>(FullPayload.GetData());
+        FVertexCompressed* Vertices =
+            reinterpret_cast<FVertexCompressed*>(FullPayload.GetData());
 
         PointPositions.Reset(VertexCount);
         PointColors.Reset(VertexCount);
 
         for (int32 i = 0; i < VertexCount; i++)
         {
-            const FVertex& V = Vertices[i];
+            const FVertexCompressed& V = Vertices[i];
 
             FVector Position(
-                V.X * 900.f,
-                V.Y * 900.f,
-                V.Z * 50.f);
+                (V.X/32767.0f) * 900.f,
+                (V.Y/32767.0f) * 900.f,
+                (V.Z/32767.0f) * 50.f);
 
             FLinearColor Color(
-                V.R,
-                V.G,
-                V.B,
+                V.R/255.0f,
+                V.G/255.0f,
+                V.B/255.0f,
                 1.0f);
 
             PointPositions.Add(Position);
