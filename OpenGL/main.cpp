@@ -12,22 +12,129 @@
 #include <GLFW/glfw3.h>
 #include <vector>
 #include <iostream>
+#include <fstream>
 #include <Kinect.h>
 
 using namespace std;
 
 //#include "Vertex.h" // выключить в дебаг моде
 #include "UDPSender.h"
+#include <chrono>
 
 #pragma comment(lib, "ws2_32.lib")
 
-
+#pragma pack(push, 1)
 struct Vertex
 {
-    //int id;
     float x, y, z;
     float r, g, b;
 };
+#pragma pack(pop)
+
+struct VertexCompressed {
+    int16_t x, y, z;  // 6 байт вместо 12
+    uint8_t r, g, b;  // 3 байта вместо 12
+};
+
+#pragma pack(push, 1)
+struct PacketHeader
+{
+    uint32_t frameId;
+    uint32_t chunkId;
+    uint32_t chunkCount;
+    uint32_t pointCount;
+};
+#pragma pack(pop)
+
+static void generateCloud(std::vector<Vertex>& cloud, int count)
+{
+    cloud.clear();
+    cloud.reserve(count);
+
+    for (int i = 0; i < count; i++)
+    {
+        cloud.push_back({
+            (float(rand()) / RAND_MAX) * 2.0f - 1.0f,
+            (float(rand()) / RAND_MAX) * 2.0f - 1.0f,
+            (float(rand()) / RAND_MAX) * 2.0f - 1.0f,
+            float(rand()) / RAND_MAX,
+            float(rand()) / RAND_MAX,
+            float(rand()) / RAND_MAX
+            });
+    }
+}
+
+
+void generateCloudFromImages(
+    std::vector<Vertex>& cloud,
+    const char* colorFile,
+    const char* depthFile)
+{
+    int colorW, colorH, colorC;
+    unsigned char* colorImg =
+        stbi_load(colorFile, &colorW, &colorH, &colorC, 3);
+
+    int depthW, depthH, depthC;
+    unsigned char* depthImg =
+        stbi_load(depthFile, &depthW, &depthH, &depthC, 1);
+
+    if (!colorImg || !depthImg)
+    {
+        std::cout << "Failed to load images\n";
+        return;
+    }
+
+    if (colorW != depthW || colorH != depthH)
+    {
+        std::cout << "Image sizes do not match\n";
+        return;
+    }
+
+    cloud.clear();
+    cloud.reserve(colorW * colorH);
+
+    const float depthScale = 5.0f;
+
+    for (int y = 0; y < depthH; y+=2)
+    {
+        for (int x = 0; x < depthW; x+=2)
+        {
+            int idxDepth = y * depthW + x;
+
+            unsigned char depthValue = depthImg[idxDepth];
+
+            if (depthValue == 0)
+                continue;
+
+            float z = (depthValue / 255.0f) * depthScale;
+
+            float px = (float)x / depthW - 0.5f;
+            float py = -(float)y / depthH + 0.5f;
+
+            int idxColor = (y * colorW + x) * 3;
+
+            float r = colorImg[idxColor + 0] / 255.0f;
+            float g = colorImg[idxColor + 1] / 255.0f;
+            float b = colorImg[idxColor + 2] / 255.0f;
+
+            cloud.push_back({
+                px,
+                py,
+                z,
+                r,
+                g,
+                b
+                });
+        }
+    }
+
+    stbi_image_free(colorImg);
+    stbi_image_free(depthImg);
+
+    std::cout << "Loaded point cloud: "
+        << cloud.size()
+        << " points\n";
+}
 
 int main()
 {
@@ -39,60 +146,120 @@ int main()
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(5005);
-
-    //inet_pton(AF_INET, "10.182.94.187", &addr.sin_addr);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+
     std::vector<Vertex> cloud;
 
-    for (int i = 0; i < 500; i++)
-    {
-        cloud.push_back({
-            //(int)i,
-            (float)(rand() % 10000) / 50.0f - 1.0f,
-            (float)(rand() % 10000) / 50.0f - 1.0f,
-            (float)(rand() % 10000) / 50.0f - 1.0f,
-            (float)(rand() % 100) / 100.0f,
-            (float)(rand() % 100) / 100.0f,
-            (float)(rand() % 100) / 100.0f
-            });
-    }
+    const int POINT_COUNT = 10;
+    const int MAX_UDP_SIZE = 1024;
 
-    std::cout << "sending loop...\n";
+    uint32_t frameId = 0;
+
+    std::cout << "UDP sender started...\n";
+
 
     while (true)
     {
+        generateCloudFromImages(
+            cloud,
+            "assets/color.jpeg",
+            "assets/depth.png");
 
+        const int payloadLimit = MAX_UDP_SIZE - sizeof(PacketHeader);
 
-		cloud.clear();
+        int totalSize = cloud.size() * sizeof(Vertex);
+        int chunkCount = (totalSize + payloadLimit - 1) / payloadLimit;
 
-        for (int i = 0; i < 500; i++)
+        for (int chunkId = 0; chunkId < chunkCount; chunkId++)
         {
-            cloud.push_back({
-                //(int)i,
-                (float)(rand() % 10000) / 50.0f - 1.0f,
-                (float)(rand() % 10000) / 50.0f - 1.0f,
-                (float)(rand() % 10000) / 50.0f - 1.0f,
-                (float)(rand() % 100) / 100.0f,
-                (float)(rand() % 100) / 100.0f,
-                (float)(rand() % 100) / 100.0f
-                });
+            PacketHeader header;
+            header.frameId = frameId;
+            header.chunkId = chunkId;
+            header.chunkCount = chunkCount;
+            header.pointCount = (uint32_t)cloud.size();
+
+            int offset = chunkId * payloadLimit;
+            int chunkSize = min(payloadLimit, totalSize - offset);
+
+            std::vector<char> packet(sizeof(PacketHeader) + chunkSize);
+
+
+            memcpy(packet.data(), &header, sizeof(PacketHeader));
+            memcpy(packet.data() + sizeof(PacketHeader),
+                ((char*)cloud.data()) + offset,
+                chunkSize);
+
+            sendto(sock,
+                packet.data(),
+                (int)packet.size(),
+                0,
+                (sockaddr*)&addr,
+                sizeof(addr));
         }
 
+        std::cout << "frame " << frameId
+            << " sent (" << chunkCount << " chunks)\n";
 
 
-        sendto(
-            sock,
-            (char*)cloud.data(),
-            cloud.size() * sizeof(Vertex),
-            0,
-            (sockaddr*)&addr,
-            sizeof(addr)
-        );
 
-        std::cout << "sent packet: " << cloud.size() << " points\n";
+        //auto t1 = std::chrono::high_resolution_clock::now();
+        //vector<VertexCompressed> compressed;
+        //compressed.reserve(cloud.size());
+        //for (auto& v : cloud) {
+        //    compressed.push_back({
+        //        (int16_t)(v.x * 1000),
+        //        (int16_t)(v.y * 1000),
+        //        (int16_t)(v.z * 1000),
+        //        (uint8_t)(v.r * 255),
+        //        (uint8_t)(v.g * 255),
+        //        (uint8_t)(v.b * 255)
+        //        });
+        //}
+        //auto t2 = std::chrono::high_resolution_clock::now();
+        //auto ms = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
 
-        //Sleep(33); 
+        //cout << "Compression time: " << ms << endl;
+
+
+        //totalSize = compressed.size() * sizeof(VertexCompressed);
+        //chunkCount = (totalSize + payloadLimit - 1) / payloadLimit;
+
+        //for (int chunkId = 0; chunkId < chunkCount; chunkId++)
+        //{
+        //    PacketHeader header;
+        //    header.frameId = frameId;
+        //    header.chunkId = chunkId;
+        //    header.chunkCount = chunkCount;
+        //    header.pointCount = (uint32_t)compressed.size();
+
+        //    int offset = chunkId * payloadLimit;
+        //    int chunkSize = min(payloadLimit, totalSize - offset);
+
+        //    std::vector<char> packet(sizeof(PacketHeader) + chunkSize);
+
+
+        //    memcpy(packet.data(), &header, sizeof(PacketHeader));
+        //    memcpy(packet.data() + sizeof(PacketHeader),
+        //        ((char*)compressed.data()) + offset,
+        //        chunkSize);
+
+        //    sendto(sock,
+        //        packet.data(),
+        //        (int)packet.size(),
+        //        0,
+        //        (sockaddr*)&addr,
+        //        sizeof(addr));
+        //}
+
+        //std::cout << "frame " << frameId
+        //    << " sent (" << chunkCount << " chunks)\n";
+
+
+        frameId++;
+
+        Sleep(33); // ~30 FPS
     }
+
     closesocket(sock);
     WSACleanup();
 }
